@@ -6,6 +6,7 @@ from power_dialer import PowerDialer
 from power_dialer.service.db import Database
 from power_dialer.service.dialer import Dialer
 from power_dialer.error.dialer_error import DialerError
+from power_dialer.error.power_dialer_error import PowerDialerError
 
 class TestPowerDialer(unittest.TestCase):
     def setUp(self):
@@ -35,6 +36,21 @@ class TestPowerDialer(unittest.TestCase):
         expected_leads_called = (PowerDialer.DIAL_RATIO - 1)
         self.assertEqual(self.db.calling_leads.__len__(), expected_leads_called, msg='Expect to have %d lead(s) being called.' % expected_leads_called)
         self.assertEqual(self.db.agents_on_call.__len__(), 1, msg='Expect to have 1 agents being on call.')
+
+    def test_power_dialer_on_call_started_exception(self):
+        mock = Mock()
+        db = Database()
+        db.delete_lead_to_be_called = mock
+        mock.return_value = False
+
+
+        dialer = Dialer(db=db, disable_simulation=True)
+        power_dialer = PowerDialer(agent_id=1, db=db, dialer=dialer)
+
+        power_dialer.on_agent_login()
+        finished, pending = concurrent.futures.wait(power_dialer.futures, 0, concurrent.futures.ALL_COMPLETED)
+        
+        self.assertRaises(PowerDialerError, power_dialer.on_call_started, 1)
 
     def test_power_dialer_on_call_failed(self):
         self.power_dialer.on_agent_login()

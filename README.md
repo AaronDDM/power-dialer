@@ -26,7 +26,7 @@ powerDialer.on_call_ended(lead_phone_number='19051235285')
 
 ## Run Tests
 ```bash
-python3 -m unittest discover tests
+python3 -m unittest discover test
 ```
 
 ## Assumptions
@@ -34,4 +34,4 @@ python3 -m unittest discover tests
   - e.g. When an Agent logs into n App, the `PowerDialer.on_agent_login()` is invoked.
   - e.g. When the Dialer service is used, it will be responsible for sending an event to the PowerDialer later on to invoke the `PowerDialer.on_call_started()` or PowerDialer.on_call_failed() event.
 - When `Dialer.get_lead_phone_number()` is called, the lead phone number is taken out from the "queue" and is no longer useable by other agents (this is simulated).
-- The database can be any database - we currently mocked a database and even provided it with simulated delays. This mock database is also used for unit testing - in a production app, we would only use the mock for testing purposes.
+- The database can be any database - we currently mocked a database and even provided it with simulated delays. This *mock database is also used for unit testing* - in a production app, we would only use the mock for testing purposes.

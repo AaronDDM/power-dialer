@@ -12,13 +12,14 @@ class Database:
             }
         }
         self.leads = [
-            {'phone_number': "11231231234"},
-            {'phone_number': "12325828324"},
-            {'phone_number': "14719284724"},
-            {'phone_number': "19274718724"}
+            {'phone_number': "11231231234", "called": False, "agent_id": None},
+            {'phone_number': "12325828324", "called": False, "agent_id": None},
+            {'phone_number': "14719284724", "called": False, "agent_id": None},
+            {'phone_number': "19274718724", "called": False, "agent_id": None}
         ]
-        self.calling_leads = []
+        self.leads_called = []
         self.agents_on_call = []
+        self.calling_leads = []
         self.disable_simulation = disable_simulation
 
     def fetch_leads_being_called(self, agent_id: str):
@@ -69,6 +70,11 @@ class Database:
             x['agent_id'] != agent_id), self.agents_on_call))
         return True
 
+    def insert_lead_called(self, agent_id: str, lead_phone_number: str):
+        self.leads_called.append(
+            {'agent_id': agent_id, 'lead_phone_number': lead_phone_number})
+        return True
+
     def fetch_lead(self):
         self._simulateDelay()
         if self.leads.__len__() > 0:
@@ -76,6 +82,13 @@ class Database:
         else: 
             raise DatabaseError('No new leads found.')
 
+    def update_lead(self, phone_number: str, lead: dict):
+        self._simulateDelay()
+        agent = self.leads.get(agent_id)
+        if agent:
+            self.agents.update({**agent, 'online': online, 'on_call': on_call})
+        return True
+        
     def update_agent(self, agent_id: str):
         self._simulateDelay()
         agent = self.agents.get(agent_id)

@@ -27,6 +27,7 @@ class Dialer:
 
     def dial(self, agent_id: str, lead_phone_number: str):
         self._simulateDelay()
+        self.db.insert_lead_called(agent_id=agent_id, lead_phone_number=lead_phone_number)
         return DialerStatus.DIALING
 
     def _simulateDelay(self):

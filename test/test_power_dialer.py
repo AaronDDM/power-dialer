@@ -2,7 +2,7 @@ import unittest
 import concurrent.futures
 import threading
 from unittest.mock import Mock
-from power_dialer.power_dialer import PowerDialer
+from power_dialer import PowerDialer
 from power_dialer.service.db import Database
 from power_dialer.service.dialer import Dialer
 from power_dialer.error.dialer_error import DialerError

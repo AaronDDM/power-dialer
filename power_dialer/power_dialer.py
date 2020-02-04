@@ -1,11 +1,8 @@
-#!/usr/bin/python3
-
 import concurrent.futures
 from .error.dialer_error import DialerError
 from .error.power_dialer_error import PowerDialerError
 from .service.db import Database
 from .service.dialer import Dialer, DialerStatus
-
 
 class PowerDialer:
     DIAL_RATIO: int = 2

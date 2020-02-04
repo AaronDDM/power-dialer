@@ -1,4 +1,3 @@
-#!/usr/bin/python3
 import random
 import time
 from ..error.database_error import DatabaseError

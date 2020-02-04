@@ -19,13 +19,13 @@ class PowerDialer:
     def on_agent_logout(self):
         delete_leads_to_be_called = self.db.delete_all_leads_to_be_called(agent_id=self.agent_id)
         if delete_leads_to_be_called is False:
-            raise PowerDialerError('Unable to delete all leads to be called for the agent %s' % (self.agent_id))
+            raise PowerDialerError('[on_agent_logout] Unable to delete all leads to be called for the agent %s' % (self.agent_id))
 
         delete_agent_on_call = self.db.delete_agent_on_call(
             agent_id=self.agent_id)
         if delete_agent_on_call is False:
             raise PowerDialerError(
-                'Unable to delete all records for the agent being on call for the agent %s' % (self.agent_id))
+                '[on_agent_logout] Unable to delete all records for the agent being on call for the agent %s' % (self.agent_id))
         
         return True
 
@@ -37,14 +37,13 @@ class PowerDialer:
                     agent_id=self.agent_id, lead_phone_number=lead_phone_number)
                 return True
         else:
-            raise PowerDialerError('Unable to delete lead %s from leads to be called list for agent %s' % (lead_phone_number, self.agent_id))
+            raise PowerDialerError('[on_call_started] Unable to delete lead %s from leads to be called list for agent %s' % (lead_phone_number, self.agent_id))
 
     def on_call_failed(self, lead_phone_number: str):
-        # Remove the number from the lead phone numbers so that
-        # it is not re-dialed accidentally.
-        self.db.delete_lead_to_be_called(
-            agent_id=self.agent_id, lead_phone_number=lead_phone_number)
-        return self.dial()
+        if self.db.delete_lead_to_be_called(agent_id=self.agent_id, lead_phone_number=lead_phone_number):
+            return self.dial()
+        else:
+            raise PowerDialerError('[on_call_failed] Unable to delete lead %s from leads to be called list for agent %s' % (lead_phone_number, self.agent_id))
 
     def on_call_ended(self, lead_phone_number: str):
         delete_agent_on_call = self.db.delete_agent_on_call(
@@ -52,8 +51,16 @@ class PowerDialer:
         if delete_agent_on_call is True:
             return self.dial()
         else:
-            raise PowerDialerError('Unable to mark the agent\'s call as having ended for the agent %s' % (self.agent_id))
+            raise PowerDialerError('[on_call_ended] Unable to mark the agent\'s call as having ended for the agent %s' % (self.agent_id))
 
+    # This method is responsible for concurrently
+    # (using multiple threads) dialing self.DIAL_RATIO leads 
+    # at a time for a given self.agent_id.
+    #
+    # Note: If an agent is already dialing a lead 
+    # and this method is called again - it will only dial
+    # (DIAL_RATIO - # of leads currently being called) for the
+    # given agent. This maintains the DIAL_RATIO # of calls.
     def dial(self):
         total_new_leads_to_dial = PowerDialer.DIAL_RATIO - \
             self.db.fetch_total_leads_being_called(agent_id=self.agent_id)
@@ -64,13 +71,14 @@ class PowerDialer:
                 try:
                     lead_phone_number = self.dialer.get_lead_phone_number_to_dial()
                 except DialerError as err:
-                    raise PowerDialerError('An error occurred while attempting to fetch a lead phone number: %s' % (err))
+                    raise PowerDialerError(
+                        '[dial] An error occurred while attempting to fetch a lead phone number: %s' % (err))
                 else:
                     inserted_leads = self.db.insert_lead_to_be_called(
                         agent_id=self.agent_id, lead_phone_number=lead_phone_number)
         
         if inserted_leads is False:
-            raise PowerDialerError('An error occurred while attempting to insert a lead into the to be called database for agent %s' % (self.agent_id))
+            raise PowerDialerError('[dial] An error occurred while attempting to insert a lead into the to be called database for agent %s' % (self.agent_id))
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=PowerDialer.DIAL_RATIO + 1) as executor:
             leads = self.db.fetch_leads_being_called(agent_id=self.agent_id)

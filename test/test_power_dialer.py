@@ -7,7 +7,7 @@ from power_dialer.service.db import Database
 from power_dialer.service.dialer import Dialer
 from power_dialer.error.dialer_error import DialerError
 
-class TestPowerDial(unittest.TestCase):
+class TestPowerDialer(unittest.TestCase):
     def setUp(self):
         # Because this DB is essentially a mock DB - we can use it for testing as well!
         self.db = Database(disable_simulation=True)

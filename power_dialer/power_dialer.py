@@ -53,8 +53,8 @@ class PowerDialer:
         else:
             raise PowerDialerError('[on_call_ended] Unable to mark the agent\'s call as having ended for the agent %s' % (self.agent_id))
 
-    # This method is responsible for concurrently
-    # (using multiple threads) dialing self.DIAL_RATIO leads 
+    # This method is responsible for initaiting the 
+    # concurrent dialing self.DIAL_RATIO leads 
     # at a time for a given self.agent_id.
     #
     # Note: If an agent is already dialing a lead 
@@ -79,10 +79,16 @@ class PowerDialer:
         
         if inserted_leads is False:
             raise PowerDialerError('[dial] An error occurred while attempting to insert a lead into the to be called database for agent %s' % (self.agent_id))
-
-        with concurrent.futures.ThreadPoolExecutor(max_workers=PowerDialer.DIAL_RATIO + 1) as executor:
-            leads = self.db.fetch_leads_being_called(agent_id=self.agent_id)
             
+        return self.multi_threaded_dial()
+
+    # When called, we spin up DIAL_RATIO + 1 threads
+    # and call the Dialer servicer for all
+    # leads to be called in the database for the given self.agent_id
+    def multi_threaded_dial(self):
+        with concurrent.futures.ThreadPoolExecutor(max_workers=self.DIAL_RATIO + 1) as executor:
+            leads = self.db.fetch_leads_being_called(agent_id=self.agent_id)
+
             self.futures = {
                 executor.submit(self.dialer.dial, self.agent_id, lead_phone_number): lead_phone_number for lead_phone_number in leads
             }
@@ -91,5 +97,6 @@ class PowerDialer:
                 lead = self.futures[future]
                 try:
                     data = future.result()
+                    return True
                 except Exception as exc:
                     return self.on_call_failed(lead_phone_number=lead['lead_phone_number'])

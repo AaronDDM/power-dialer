@@ -105,6 +105,16 @@ class TestPowerDialer(unittest.TestCase):
 
         self.assertEqual(self.db.leads.__len__(), 2, msg='Expect to have only 2 leads remaining.')
 
+    def test_power_dialer_dial_exception(self):
+        dialer = Dialer(db=self.db, disable_simulation=False)
+
+        mock = Mock(side_effect=DialerError('No lead phone number to return'))
+        dialer.get_lead_phone_number_to_dial = mock
+
+        power_dialer = PowerDialer(agent_id=1, db=self.db, dialer=dialer)
+
+        self.assertRaises(PowerDialerError, power_dialer.dial)
+
     def mock_get_lead_phone_number():
         try:
             lead = self.db.fetch_lead()

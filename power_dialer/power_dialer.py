@@ -82,11 +82,11 @@ class PowerDialer:
             
         return self.multi_threaded_dial()
 
-    # When called, we spin up DIAL_RATIO + 1 threads
+    # When called, we spin up DIAL_RATIO threads
     # and call the Dialer servicer for all
     # leads to be called in the database for the given self.agent_id
     def multi_threaded_dial(self):
-        with concurrent.futures.ThreadPoolExecutor(max_workers=self.DIAL_RATIO + 1) as executor:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=self.DIAL_RATIO) as executor:
             leads = self.db.fetch_leads_being_called(agent_id=self.agent_id)
 
             self.futures = {

@@ -17,17 +17,17 @@ db = Database()
 dialer = Dialer(db=db)
 
 # e.g. A an logs into a mobile app
-powerDialer = PowerDialer(agent_id=1, db=db, dialer=dialer)
-powerDialer.on_agent_login()
+powerDialer = PowerDialer(agent_id=1, db=db)
+powerDialer.on_agent_login(dialer=dialer)
 # ...
 powerDialer.on_agent_logout()
 
 # e.g. A Dialer service has successfully started a call 
 powerDialer.on_call_started(lead_phone_number='19051235285')
 # ...
-powerDialer.on_call_failed(lead_phone_number='19051235285')
+powerDialer.on_call_failed(lead_phone_number='19051235285', dialer=dialer)
 # ...
-powerDialer.on_call_ended(lead_phone_number='19051235285')
+powerDialer.on_call_ended(lead_phone_number='19051235285', dialer=dialer)
 ```
 
 ## Run Tests

@@ -7,14 +7,13 @@ from .service.dialer import Dialer, DialerStatus
 class PowerDialer:
     DIAL_RATIO: int = 2
 
-    def __init__(self, agent_id: str, db: Database, dialer: Dialer):
+    def __init__(self, agent_id: str, db: Database):
         self.db = db
-        self.dialer = dialer
         self.agent_id = agent_id
         self.futures: dict = {}
 
-    def on_agent_login(self):
-        return self.dial()
+    def on_agent_login(self, dialer: Dialer):
+        return self.dial(dialer=dialer)
 
     def on_agent_logout(self):
         delete_leads_to_be_called = self.db.delete_all_leads_to_be_called(agent_id=self.agent_id)
@@ -39,17 +38,17 @@ class PowerDialer:
         else:
             raise PowerDialerError('[on_call_started] Unable to delete lead %s from leads to be called list for agent %s' % (lead_phone_number, self.agent_id))
 
-    def on_call_failed(self, lead_phone_number: str):
+    def on_call_failed(self, lead_phone_number: str, dialer: Dialer):
         if self.db.delete_lead_to_be_called(agent_id=self.agent_id, lead_phone_number=lead_phone_number):
-            return self.dial()
+            return self.dial(dialer=dialer)
         else:
             raise PowerDialerError('[on_call_failed] Unable to delete lead %s from leads to be called list for agent %s' % (lead_phone_number, self.agent_id))
 
-    def on_call_ended(self, lead_phone_number: str):
+    def on_call_ended(self, lead_phone_number: str, dialer: Dialer):
         delete_agent_on_call = self.db.delete_agent_on_call(
             agent_id=self.agent_id)
         if delete_agent_on_call is True:
-            return self.dial()
+            return self.dial(dialer=dialer)
         else:
             raise PowerDialerError('[on_call_ended] Unable to mark the agent\'s call as having ended for the agent %s' % (self.agent_id))
 
@@ -61,7 +60,7 @@ class PowerDialer:
     # and this method is called again - it will only dial
     # (DIAL_RATIO - # of leads currently being called) for the
     # given agent. This maintains the DIAL_RATIO # of calls.
-    def dial(self):
+    def dial(self, dialer: Dialer):
         total_new_leads_to_dial = PowerDialer.DIAL_RATIO - \
             self.db.fetch_total_leads_being_called(agent_id=self.agent_id)
 
@@ -69,7 +68,7 @@ class PowerDialer:
         for i in range(total_new_leads_to_dial):
             if inserted_leads is True:
                 try:
-                    lead_phone_number = self.dialer.get_lead_phone_number_to_dial()
+                    lead_phone_number = dialer.get_lead_phone_number_to_dial()
                 except DialerError as err:
                     raise PowerDialerError(
                         '[dial] An error occurred while attempting to fetch a lead phone number: %s' % (err))
@@ -80,17 +79,17 @@ class PowerDialer:
         if inserted_leads is False:
             raise PowerDialerError('[dial] An error occurred while attempting to insert a lead into the to be called database for agent %s' % (self.agent_id))
             
-        return self.multi_threaded_dial()
+        return self.multi_threaded_dial(dialer=dialer)
 
     # When called, we spin up DIAL_RATIO threads
     # and call the Dialer servicer for all
     # leads to be called in the database for the given self.agent_id
-    def multi_threaded_dial(self):
+    def multi_threaded_dial(self, dialer):
         with concurrent.futures.ThreadPoolExecutor(max_workers=self.DIAL_RATIO) as executor:
             leads = self.db.fetch_leads_being_called(agent_id=self.agent_id)
 
             self.futures = {
-                executor.submit(self.dialer.dial, self.agent_id, lead_phone_number): lead_phone_number for lead_phone_number in leads
+                executor.submit(dialer.dial, self.agent_id, lead_phone_number): lead_phone_number for lead_phone_number in leads
             }
 
             for future in concurrent.futures.as_completed(self.futures):
@@ -98,5 +97,5 @@ class PowerDialer:
                 try:
                     data = future.result()
                     return True
-                except Exception as exc:
-                    return self.on_call_failed(lead_phone_number=lead['lead_phone_number'])
+                except DialerError as error:
+                    return self.on_call_failed(lead_phone_number=lead['lead_phone_number'], dialer=dialer)

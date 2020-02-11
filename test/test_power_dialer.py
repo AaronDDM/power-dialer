@@ -4,29 +4,31 @@ import threading
 from unittest.mock import Mock
 from power_dialer import PowerDialer
 from power_dialer.service.db import Database
-from power_dialer.service.dialer import Dialer
+from power_dialer.service.dialer import Dialer, DialerStatus
 from power_dialer.error.dialer_error import DialerError
 from power_dialer.error.power_dialer_error import PowerDialerError
 
 class TestPowerDialer(unittest.TestCase):
     def setUp(self):
         # Because this DB is essentially a mock DB - we can use it for testing as well!
-        self.db = Database(disable_simulation=True)
-        self.dialer = Dialer(db=self.db, disable_simulation=True)
-        self.power_dialer = PowerDialer(agent_id=1, db=self.db, dialer=self.dialer)
+        self.db = Database(disable_simulation=False)
+        self.power_dialer = PowerDialer(agent_id=1, db=self.db)
 
     def test_power_dialer_init(self):
         self.assertTrue(isinstance(self.power_dialer, PowerDialer),
                         msg='Successfully initiated our PowerDialer class.')
 
     def test_power_dialer_on_agent_login(self):
-        self.power_dialer.on_agent_login()
+        dialer = Dialer(db=self.db, disable_simulation=False)
+        self.power_dialer.on_agent_login(dialer=dialer)
         finished, pending = concurrent.futures.wait(self.power_dialer.futures, 0, concurrent.futures.ALL_COMPLETED)
 
         self.assertEqual(self.db.calling_leads.__len__(), PowerDialer.DIAL_RATIO, msg='Expect to have %d lead(s) being called.' % PowerDialer.DIAL_RATIO)
                         
     def test_power_dialer_on_call_started(self):
-        self.power_dialer.on_agent_login()
+        dialer = Dialer(db=self.db, disable_simulation=False)
+
+        self.power_dialer.on_agent_login(dialer=dialer)
         finished, pending = concurrent.futures.wait(self.power_dialer.futures, 0, concurrent.futures.ALL_COMPLETED)
 
         self.assertEqual(self.db.calling_leads.__len__(), PowerDialer.DIAL_RATIO, msg='Expect to have %d lead(s) being called.' % PowerDialer.DIAL_RATIO)
@@ -43,20 +45,21 @@ class TestPowerDialer(unittest.TestCase):
         db.delete_lead_to_be_called = mock
         mock.return_value = False
 
+        dialer = Dialer(db=self.db, disable_simulation=False)
+        power_dialer = PowerDialer(agent_id=1, db=db)
 
-        dialer = Dialer(db=db, disable_simulation=True)
-        power_dialer = PowerDialer(agent_id=1, db=db, dialer=dialer)
-
-        power_dialer.on_agent_login()
+        power_dialer.on_agent_login(dialer=dialer)
         finished, pending = concurrent.futures.wait(power_dialer.futures, 0, concurrent.futures.ALL_COMPLETED)
         
         self.assertRaises(PowerDialerError, power_dialer.on_call_started, 1)
 
     def test_power_dialer_on_call_failed(self):
-        self.power_dialer.on_agent_login()
+        dialer = Dialer(db=self.db, disable_simulation=False)
+
+        self.power_dialer.on_agent_login(dialer=dialer)
         finished, pending = concurrent.futures.wait(self.power_dialer.futures, 0, concurrent.futures.ALL_COMPLETED)
             
-        self.power_dialer.on_call_failed('19274718724')
+        self.power_dialer.on_call_failed(lead_phone_number='19274718724', dialer=dialer)
         finished, pending = concurrent.futures.wait(self.power_dialer.futures, 0, concurrent.futures.ALL_COMPLETED)
 
         # If a lead call failed, we should have dialed
@@ -64,10 +67,12 @@ class TestPowerDialer(unittest.TestCase):
         self.assertEqual(self.db.calling_leads.__len__(), PowerDialer.DIAL_RATIO, msg='Expect to have %d lead(s) being called.' % PowerDialer.DIAL_RATIO)
 
     def test_power_dialer_on_call_ended(self):
-        self.power_dialer.on_agent_login()
+        dialer = Dialer(db=self.db, disable_simulation=False)
+
+        self.power_dialer.on_agent_login(dialer=dialer)
         finished, pending = concurrent.futures.wait(self.power_dialer.futures, 0, concurrent.futures.ALL_COMPLETED)
 
-        self.power_dialer.on_call_ended('19274718724')
+        self.power_dialer.on_call_ended(lead_phone_number='19274718724', dialer=dialer)
         finished, pending = concurrent.futures.wait(self.power_dialer.futures, 0, concurrent.futures.ALL_COMPLETED)
 
         # After a call has ended - we start re-dialing leads
@@ -75,15 +80,17 @@ class TestPowerDialer(unittest.TestCase):
         self.assertEqual(self.db.calling_leads.__len__(), PowerDialer.DIAL_RATIO, msg='Expect to have %d lead(s) being called.' % PowerDialer.DIAL_RATIO)
 
     def test_power_dialer_on_agent_logout(self):
-        self.power_dialer.on_agent_login()
+        dialer = Dialer(db=self.db, disable_simulation=False)
+
+        self.power_dialer.on_agent_login(dialer=dialer)
         finished, pending = concurrent.futures.wait(self.power_dialer.futures, 0, concurrent.futures.ALL_COMPLETED)
 
         self.assertEqual(self.db.calling_leads.__len__(), PowerDialer.DIAL_RATIO, msg='Expect to have %d lead(s) being called.' % PowerDialer.DIAL_RATIO)
 
-        self.power_dialer.on_call_started('19274718724')
+        self.power_dialer.on_call_started(lead_phone_number='19274718724')
         self.assertEqual(self.db.agents_on_call.__len__(), 1, msg='Expect to have 1 agents being on call.')
 
-        self.power_dialer.on_call_ended('19274718724')
+        self.power_dialer.on_call_ended(lead_phone_number='19274718724', dialer=dialer)
         finished, pending = concurrent.futures.wait(self.power_dialer.futures, 0, concurrent.futures.ALL_COMPLETED)
         
         self.power_dialer.on_agent_logout()
@@ -92,16 +99,17 @@ class TestPowerDialer(unittest.TestCase):
         self.assertEqual(self.db.agents_on_call.__len__(), 0, msg='Expect to have 0 agents being on call.')
 
     def test_power_dialer_failed_dials(self):
-        dialer = Dialer(db=self.db, disable_simulation=False)
+        dialer = Dialer(db=self.db, disable_simulation=True)
 
         mock = Mock()
-        dialer.get_lead_phone_number_to_dial = mock
-        mock.return_value = self.mock_get_lead_phone_number
+        mock.return_value = DialerStatus.FAILED
 
-        power_dialer = PowerDialer(agent_id=1, db=self.db, dialer=dialer)
+        dialer.dial = mock
 
-        self.power_dialer.on_agent_login()
-        finished, pending = concurrent.futures.wait(self.power_dialer.futures, 0, concurrent.futures.ALL_COMPLETED)
+        power_dialer = PowerDialer(agent_id=1, db=self.db)
+
+        power_dialer.dial(dialer=dialer)
+        finished, pending = concurrent.futures.wait(power_dialer.futures, 0, concurrent.futures.ALL_COMPLETED)
 
         self.assertEqual(self.db.leads.__len__(), 2, msg='Expect to have only 2 leads remaining.')
 
@@ -111,9 +119,9 @@ class TestPowerDialer(unittest.TestCase):
         mock = Mock(side_effect=DialerError('No lead phone number to return'))
         dialer.get_lead_phone_number_to_dial = mock
 
-        power_dialer = PowerDialer(agent_id=1, db=self.db, dialer=dialer)
+        power_dialer = PowerDialer(agent_id=1, db=self.db)
 
-        self.assertRaises(PowerDialerError, power_dialer.dial)
+        self.assertRaises(PowerDialerError, power_dialer.dial, dialer)
 
     def mock_get_lead_phone_number():
         try:
